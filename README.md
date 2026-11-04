@@ -39,7 +39,6 @@ For Streamlit Community Cloud, select repository `Arithmetic-Power-Geometry/UMU-
 - The week-wise CO mapping is provisional and requires academic verification.
 - The 30-hours-per-credit notional calculation is illustrative and conditional on competent University authorization.
 - The application does not constitute an academic approval workflow or replace University bodies, applicable statutes, or professional-council requirements.
-- The public repository contains the software, not the private UMU-UCDRM development prompts or internal documents.
 - No authentication or secure multi-user storage is provided by this application. Do not enter confidential personal data or unpublished restricted institutional records into a public deployment.
 
 ## License
