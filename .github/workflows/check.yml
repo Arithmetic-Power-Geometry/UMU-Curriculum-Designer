@@ -1,0 +1,27 @@
+name: Streamlit application checks
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install -r requirements.txt
+      - run: python -m compileall -q app.py print_engine.py
+      - name: Check Word document generation
+        run: |
+          python - <<'PY'
+          from io import BytesIO
+          from docx import Document
+          from print_engine import syllabus, lecture_plan, weekly_plan
+          c = dict(programme="MCA",faculty="Test",department="Computing and IT",semester="I",name="Operating System",code="MCA-CC101",credits=3,weeks=15,lecture=3,cos=["Explain OS"],units=[dict(name="Unit I",topics="Introduction, processes",hours=45)],suggestions=[],status="Faculty draft")
+          assert len(weekly_plan(c)) == 15
+          assert Document(BytesIO(syllabus(c))).paragraphs
+          assert Document(BytesIO(lecture_plan(c))).tables
+          print("Word generation passed")
+          PY
