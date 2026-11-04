@@ -1,6 +1,6 @@
 import json
 import streamlit as st
-from print_engine import syllabus, lecture_plan, weekly_plan, unit_for
+from print_engine import syllabus, lecture_plan, weekly_plan, unit_for, mentioned_unit
 
 st.set_page_config(page_title="UMU Curriculum Designer", layout="wide")
 st.title("USHA MARTIN UNIVERSITY, RANCHI")
@@ -58,6 +58,9 @@ elif step==2:
         initial=s.get("unit") or unit_for(s,c["units"]) or options[0]
         s["unit"]=st.selectbox("Place under unit",options,index=options.index(initial) if initial in options else 0,key=f"select{i}")
         s["include"]=st.checkbox("Include after review",value=bool(s.get("include")),key=f"include{i}")
+        named=mentioned_unit(s,c["units"])
+        if named and named != s["unit"]:
+            st.error(f"Unit mismatch: activity mentions {named}, but selection is {s['unit']}. Choose the matching unit or correct the activity text.")
 elif step==3:
     st.dataframe(weekly_plan(c),use_container_width=True,hide_index=True)
     total=sum(int(u["hours"]) for u in c["units"])
@@ -68,8 +71,11 @@ elif step==3:
 else:
     st.write("Review the original syllabus and accepted additions before downloading.")
     c["status"]=st.selectbox("Review status",["Faculty draft","Submitted for review","Reviewed"],index=["Faculty draft","Submitted for review","Reviewed"].index(c["status"]) if c.get("status") in ["Faculty draft","Submitted for review","Reviewed"] else 0)
-    st.download_button("Download revised syllabus (Word)",syllabus(c),file_name="revised_syllabus.docx")
-    st.download_button("Download lecture plan (Word)",lecture_plan(c),file_name="lecture_plan.docx")
+    conflicts=[s for s in c["suggestions"] if s.get("include") and not unit_for(s,c["units"])]
+    if conflicts:
+        st.error(f"{len(conflicts)} accepted addition(s) have missing or conflicting unit allocations. Correct them in Step 3 before exporting.")
+    st.download_button("Download revised syllabus (Word)",syllabus(c),file_name="revised_syllabus.docx",disabled=bool(conflicts))
+    st.download_button("Download lecture plan (Word)",lecture_plan(c),file_name="lecture_plan.docx",disabled=bool(conflicts))
     st.download_button("Save course JSON",json.dumps(c,indent=2),file_name="course.json")
 a,b=st.columns(2)
 if a.button("Previous",disabled=step==0):st.session_state.page-=1;st.rerun()
