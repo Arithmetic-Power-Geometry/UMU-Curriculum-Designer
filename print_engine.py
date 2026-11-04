@@ -13,19 +13,36 @@ BLUE = RGBColor(7, 94, 127)
 ORANGE = RGBColor(207, 104, 34)
 def norm(s):
     return re.sub(r"[^a-z0-9]+", "", str(s).lower())
-def unit_for(suggestion, units):
-    """Resolve explicit unit selection or legacy JSON 'Unit II:' text."""
-    target = str(suggestion.get("unit", "")).strip()
+def mentioned_unit(suggestion, units):
+    """Recognize a unit explicitly named in the proposed activity text."""
+    match = re.search(r"\\bunit\\s*([ivxlcdm]+|\\d+)\\b", str(suggestion.get("text", "")), re.I)
+    if not match:
+        return ""
+    code = match.group(1).lower()
     for unit in units:
-        if target and (norm(target) == norm(unit["name"]) or norm(target) == norm(unit["name"].split(".")[0])):
+        found = re.search(r"\\bunit\\s*([ivxlcdm]+|\\d+)\\b", str(unit["name"]), re.I)
+        if found and found.group(1).lower() == code:
             return unit["name"]
-    match = re.search(r"\bunit\s*([ivxlcdm]+|\d+)\b", str(suggestion.get("text","")), re.I)
-    if match:
-        prefix = "unit"+match.group(1).lower()
-        for unit in units:
-            if norm(unit["name"]).startswith(prefix):
-                return unit["name"]
-    return ""  # Never silently attach an unmatched addition to Unit I.
+    return ""
+
+def unit_for(suggestion, units):
+    """Return an unambiguous target; conflicting explicit and textual units are rejected."""
+    target = str(suggestion.get("unit", "")).strip()
+    explicit = ""
+    for unit in units:
+        name = str(unit["name"])
+        head = re.match(r"^\\s*unit\\s*([ivxlcdm]+|\\d+)\\b", name, re.I)
+        selected = re.match(r"^\\s*unit\\s*([ivxlcdm]+|\\d+)\\b", target, re.I)
+        if target and (norm(target) == norm(name) or
+                       (head and selected and head.group(1).lower() == selected.group(1).lower())):
+            explicit = name
+            break
+    mentioned = mentioned_unit(suggestion, units)
+    if explicit and mentioned and explicit != mentioned:
+        return ""  # Never put a Unit II activity under Unit I.
+    if target and not explicit:
+        return ""  # Unknown explicit selection requires faculty correction.
+    return explicit or mentioned
 
 def weekly_plan(course):
     weeks = max(1, int(course.get("weeks",15)))
@@ -116,6 +133,12 @@ def syllabus(course):
     d.add_paragraph("Review status: "+str(course.get("status","Faculty draft")))
     return bytes_of(d)
 
+def short_unit(label):
+    """Keep the full unit title in the syllabus but use compact labels in weekly tables."""
+    matches = re.findall(r"\\bUnit\\s+(?:[IVXLCDM]+|\\d+)\\b", label, re.I)
+    return ", ".join(dict.fromkeys(matches)) if matches else label
+
+
 def lecture_plan(course):
     d=setup(Document(),course,"Week-wise lecture and learning plan")
     rows=weekly_plan(course)
@@ -127,7 +150,7 @@ def lecture_plan(course):
     plan=[]
     for i,row in enumerate(rows):
         selfhours=independent//weeks+(1 if i<independent%weeks else 0)
-        plan.append([row["week"],row["units"],row["topics"],row["co"],row["contact"],selfhours])
+        plan.append([row["week"], short_unit(row["units"]), row["topics"], row["co"], row["contact"], selfhours])
     table(d,["Week","Unit","Topics / teaching activities","CO*","Contact h","Independent h**"],plan)
     d.add_paragraph("*CO mapping is a provisional unit-order mapping and must be reviewed against the approved COs.")
     d.add_paragraph("**Independent-learning hours are illustrative, not an adopted University workload requirement.")
@@ -147,6 +170,11 @@ def lecture_plan(course):
         for s in course.get("suggestions",[]):
             if s.get("include") and unit_for(s,course["units"])==u["name"]:
                 d.add_paragraph(u["name"]+" — "+str(s.get("area",""))+": "+str(s.get("text","")))
+    unmatched=[s for s in course.get("suggestions",[]) if s.get("include") and not unit_for(s,course["units"])]
+    if unmatched:
+        d.add_heading("Additions awaiting corrected unit allocation",level=2)
+        for s in unmatched:
+            d.add_paragraph(str(s.get("area",""))+": "+str(s.get("text","")))
     d.add_paragraph("Review status: "+str(course.get("status","Faculty draft")))
     return bytes_of(d)
 
